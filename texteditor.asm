@@ -34,25 +34,7 @@ start:
     mov CommandLine, eax 
 
     invoke WinMain,hInstance,NULL,CommandLine,SW_SHOWDEFAULT
-    invoke ExitProcess,eax 
-
-;==============Windows Procedure=====================
-WndProc proc hWin :DWORD, uMsg :DWORD, wParam :DWORD, lParam :DWORD
-    ;Local vars
-    LOCAL hDC :DWORD
-
-    ;process commands here
-
-    .if uMsg == WM_DESTROY
-        invoke PostQuitMessage,NULL
-        ret
-    .endif
-
-    invoke DefWindowProc,hWin,uMsg,wParam,lParam
-
-    ret
-WndProc endp
-;====================================================
+    invoke ExitProcess,eax
 
 ;==============WinMain===============================
 WinMain proc hInst :DWORD, hPrevInst :DWORD, CmdLine :DWORD, CmdShow :DWORD
@@ -150,5 +132,24 @@ WinMain proc hInst :DWORD, hPrevInst :DWORD, CmdLine :DWORD, CmdShow :DWORD
         xor   eax, eax 
         ret 
 WinMain endp
+;------------------------------------------------------
+
+;==============Windows Procedure=====================
+WndProc proc hWin :DWORD, uMsg :DWORD, wParam :DWORD, lParam :DWORD
+    ;Local vars
+    LOCAL hDC :DWORD
+
+    ;process commands here
+
+    .if uMsg == WM_DESTROY
+        invoke PostQuitMessage,NULL
+        ret
+    .endif
+
+    invoke DefWindowProc,hWin,uMsg,wParam,lParam
+
+    ret
+WndProc endp
+;====================================================
 
 end start

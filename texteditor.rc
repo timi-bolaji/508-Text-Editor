@@ -1,0 +1,42 @@
+#include "resource.h"
+
+#define IDM_OPEN                        40001
+#define IDM_SAVE                        40002
+#define IDM_CLOSE                       40003
+#define IDM_SAVEAS                      40004
+#define IDM_EXIT                        40005
+#define IDM_COPY                        40006
+#define IDM_CUT                         40007
+#define IDM_PASTE                       40008
+#define IDM_DELETE                      40009
+#define IDM_SELECTALL                   40010
+#define IDM_OPTION                      40011
+#define IDM_UNDO                        40012
+#define IDM_REDO                        40013
+
+MAINMENU MENU 
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "&Open",                       IDM_OPEN
+        MENUITEM "&Close",                      IDM_CLOSE
+        MENUITEM "&Save",                       IDM_SAVE
+        MENUITEM "Save &As",                    IDM_SAVEAS
+        MENUITEM SEPARATOR
+        MENUITEM "E&xit",                       IDM_EXIT
+    END
+    POPUP "&Edit"
+    BEGIN
+        MENUITEM "&Undo",                       IDM_UNDO
+        MENUITEM "&Redo",                       IDM_REDO
+        MENUITEM "&Copy",                       IDM_COPY
+        MENUITEM "C&ut",                        IDM_CUT
+        MENUITEM "&Paste",                      IDM_PASTE
+        MENUITEM SEPARATOR
+        MENUITEM "&Delete",                     IDM_DELETE
+        MENUITEM SEPARATOR
+        MENUITEM "Select &All",                 IDM_SELECTALL
+    END
+    MENUITEM "Options",                     IDM_OPTION
+END
+

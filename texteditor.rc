@@ -1,4 +1,4 @@
-#include "resource.h"
+// #include "resource.h"
 
 #define MAINMENU                        101
 #define IDM_OPEN                        40001

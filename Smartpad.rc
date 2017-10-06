@@ -1,4 +1,4 @@
-#include "resource.h"
+// #include "resource.h"
 
 #define IDM_OPEN                        40001
 #define IDM_SAVE                        40002

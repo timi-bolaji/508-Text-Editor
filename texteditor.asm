@@ -49,16 +49,16 @@ RichEditID 			equ 300
 ClassName db "TextEdit",0
 WindowName db "Text Editor",0
 IsSave db "Save the file before closing?",0
+hStatus       dd 0
 RichEditDLL db "riched20.dll",0
 RichEditClass db "RichEdit20A",0
 NoRichEdit db "Cannot find riched20.dll",0
 FileFilterString 		db "Text file (*.txt)",0,"*.txt",0
 				db "All Files (*.*)",0,"*.*",0,0
 OpenFileFail db "Cannot open the file",0
-
 FileOpened dd FALSE
 BackgroundColor dd 0FFFFFFh		; default to white
-TextColor dd 0		; default to black
+TextColor dd 0		            ; default to black
 
 .data?
 CommandLine   dd ?
@@ -75,21 +75,21 @@ hMnu          dd ?
 
 .code
 start:
-    invoke GetModuleHandle, NULL
-    mov hInstance, eax
+	invoke GetModuleHandle, NULL
+	mov hInstance, eax
 
-    invoke GetCommandLine
-    mov CommandLine, eax 
+	invoke GetCommandLine
+	mov CommandLine, eax 
 
-    invoke LoadLibrary,addr RichEditDLL
-	.if eax!=0
-		mov hRichEdit,eax
+	invoke LoadLibrary,addr RichEditDLL
+		.if eax!=0
+	mov hRichEdit,eax
 		invoke WinMain,hInstance,NULL,CommandLine,SW_SHOWDEFAULT
 		invoke FreeLibrary,hRichEdit
 	.else
 		invoke MessageBox,0,addr NoRichEdit,addr WindowName,MB_OK or MB_ICONERROR
 	.endif
-    invoke ExitProcess,eax
+	invoke ExitProcess,eax
 	
 WinMain proc hInst:DWORD,hPrevInst:DWORD,CmdLine:DWORD,CmdShow:DWORD
       ;Local vars
@@ -97,9 +97,9 @@ WinMain proc hInst:DWORD,hPrevInst:DWORD,CmdLine:DWORD,CmdShow:DWORD
 	LOCAL msg:MSG
 	LOCAL hwnd:DWORD
 
-      ;Fill wc
-      ;invoke LoadIcon,hInst,500     ; icon ID
-      ;mov hIcon, eax
+	;Fill wc
+	;invoke LoadIcon,hInst,500     ; icon ID
+	;mov hIcon, eax
       
 	mov   wc.cbSize,SIZEOF WNDCLASSEX
 	mov   wc.style, CS_HREDRAW or CS_VREDRAW
@@ -117,29 +117,35 @@ WinMain proc hInst:DWORD,hPrevInst:DWORD,CmdLine:DWORD,CmdShow:DWORD
 	invoke LoadCursor,NULL,IDC_ARROW
 	mov   wc.hCursor,eax
 
-      ;Register wc
+	;Register wc
 	invoke RegisterClassEx, addr wc
 
-      ;Create window
+	;Create window
 	invoke CreateWindowEx,WS_EX_LEFT or WS_EX_ACCEPTFILES,
-                            ADDR ClassName,
-                            ADDR WindowName,
-                            WS_OVERLAPPEDWINDOW,
-                            0,0,500,500,
-                            NULL,NULL,
-                            hInst,NULL
+						ADDR ClassName,
+						ADDR WindowName,
+						WS_OVERLAPPEDWINDOW,
+						0,0,500,500,
+						NULL,NULL,
+						hInst,NULL
 	mov   hwnd,eax
 	invoke ShowWindow, hwnd,SW_SHOWNORMAL
 	invoke UpdateWindow, hwnd
-	.while TRUE
-		invoke GetMessage, ADDR msg,0,0,0
-		.break .if (!eax)
-		invoke TranslateMessage, ADDR msg
-		invoke DispatchMessage, ADDR msg
-	.endw
-	mov   eax,msg.wParam
-	ret
+	
+    MessageLoop:
+		invoke GetMessage,ADDR msg,NULL,0,0
+		cmp eax, 0
+		je ExitMsgLoop
+
+    invoke TranslateMessage, ADDR msg
+    invoke DispatchMessage,  ADDR msg
+    jmp MessageLoop
+    ExitMsgLoop:
+        xor   eax, eax 
+        ret
+		
 WinMain endp
+;-------------------------------------------------------
 
 StreamInProc proc hFile:DWORD,pBuffer:DWORD, NumBytes:DWORD, pBytesRead:DWORD
 	invoke ReadFile,hFile,pBuffer,NumBytes,pBytesRead,0
@@ -227,10 +233,6 @@ OptionProc proc hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
 					invoke InvalidateRect,eax,0,TRUE
 				.endif
 			.elseif ax==IDOK
-				;==================================================================================
-				; Save the modify state of the richedit control because changing the text color changes the
-				; modify state of the richedit control.
-				;==================================================================================
 				invoke SendMessage,hwndRichEdit,EM_GETMODIFY,0,0
 				push eax
 				invoke SetColor
@@ -262,24 +264,52 @@ OptionProc proc hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
 	mov eax,TRUE
 	ret
 OptionProc endp
+;---------------------------------
 
+;================ Status Proc =======================
+Do_Status proc hParent:DWORD
+
+    LOCAL sbParts[4] :DWORD
+
+    invoke CreateStatusWindow,WS_CHILD or WS_VISIBLE or \
+                              SBS_SIZEGRIP,NULL, hParent, 200
+    mov hStatus, eax
+      
+    mov [sbParts +  0],   125    ; pixels from left
+    mov [sbParts +  4],   250    ; pixels from left
+    mov [sbParts +  8],   375    ; pixels from left
+    mov [sbParts + 12],    -1    ; last part
+
+    invoke SendMessage,hStatus,SB_SETPARTS,4,ADDR sbParts
+
+    ret
+
+Do_Status endp
+;------------------------------------------------------
+
+
+;==============Windows Procedure=====================
 WndProc proc hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
-	LOCAL chrg:CHARRANGE
-	LOCAL ofn:OPENFILENAME
-	LOCAL buffer[256]:BYTE
-	LOCAL editstream:EDITSTREAM
-	LOCAL hFile:DWORD
-	.if uMsg==WM_CREATE
+        ;Local vars
+        LOCAL var    :DWORD
+        LOCAL hDC :DWORD
+        LOCAL rect    :RECT
+        LOCAL ps     :PAINTSTRUCT
+        LOCAL chrg:CHARRANGE
+        LOCAL ofn:OPENFILENAME
+        LOCAL buffer1[128]:BYTE
+        LOCAL FileBuffer[260]:BYTE
+        LOCAL editstream:EDITSTREAM
+        LOCAL hFile:DWORD
+	
+        ;process commands here
+        .if uMsg==WM_CREATE
 		invoke CreateWindowEx,WS_EX_CLIENTEDGE,addr RichEditClass,0,WS_CHILD or WS_VISIBLE or ES_MULTILINE or WS_VSCROLL or WS_HSCROLL or ES_NOHIDESEL,\
 				CW_USEDEFAULT,CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,hWnd,RichEditID,hInstance,0
 		mov hwndRichEdit,eax
-		;=============================================================
-		; Set the text limit. The default is 64K
-		;=============================================================
+
 		invoke SendMessage,hwndRichEdit,EM_LIMITTEXT,-1,0
-		;=============================================================
-		; Set the default text/background color
-		;=============================================================
+		
 		invoke SetColor
 		invoke SendMessage,hwndRichEdit,EM_SETMODIFY,FALSE,0
 		invoke SendMessage,hwndRichEdit,EM_EMPTYUNDOBUFFER,0,0
@@ -298,37 +328,28 @@ WndProc proc hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
 				invoke EnableMenuItem,wParam,IDM_SAVEAS,MF_GRAYED
 			.endif
 		.elseif ax==1	; edit menu
-			;=============================================================================
-			; Check whether there is some text in the clipboard. If so, we enable the paste menuitem
-			;=============================================================================
+		
 			invoke SendMessage,hwndRichEdit,EM_CANPASTE,CF_TEXT,0
 			.if eax==0		; no text in the clipboard
 				invoke EnableMenuItem,wParam,IDM_PASTE,MF_GRAYED
 			.else
 				invoke EnableMenuItem,wParam,IDM_PASTE,MF_ENABLED
 			.endif
-			;==========================================================
-			; check whether the undo queue is empty
-			;==========================================================
+
 			invoke SendMessage,hwndRichEdit,EM_CANUNDO,0,0
 			.if eax==0
 				invoke EnableMenuItem,wParam,IDM_UNDO,MF_GRAYED
 			.else
 				invoke EnableMenuItem,wParam,IDM_UNDO,MF_ENABLED
 			.endif
-			;=========================================================
-			; check whether the redo queue is empty
-			;=========================================================
+
 			invoke SendMessage,hwndRichEdit,EM_CANREDO,0,0
 			.if eax==0
 				invoke EnableMenuItem,wParam,IDM_REDO,MF_GRAYED
 			.else
 				invoke EnableMenuItem,wParam,IDM_REDO,MF_ENABLED
 			.endif
-			;=========================================================
-			; check whether there is a current selection in the richedit control.
-			; If there is, we enable the cut/copy/delete menuitem
-			;=========================================================
+
 			invoke SendMessage,hwndRichEdit,EM_EXGETSEL,0,addr chrg
 			mov eax,chrg.cpMin
 			.if eax==chrg.cpMax		; no current selection
@@ -361,15 +382,11 @@ WndProc proc hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
 					invoke CreateFile,addr FileName,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,0
 					.if eax!=INVALID_HANDLE_VALUE
 						mov hFile,eax
-						;================================================================
-						; stream the text into the richedit control
-						;================================================================						
+						
 						mov editstream.dwCookie,eax
 						mov editstream.pfnCallback,offset StreamInProc
 						invoke SendMessage,hwndRichEdit,EM_STREAMIN,SF_TEXT,addr editstream
-						;==========================================================
-						; Initialize the modify state to false
-						;==========================================================
+
 						invoke SendMessage,hwndRichEdit,EM_SETMODIFY,FALSE,0
 						invoke CloseHandle,hFile
 						mov FileOpened,TRUE
@@ -388,15 +405,11 @@ WndProc proc hWnd:DWORD, uMsg:DWORD, wParam:DWORD, lParam:DWORD
 				.if eax!=INVALID_HANDLE_VALUE
 @@:				
 					mov hFile,eax
-					;================================================================
-					; stream the text to the file
-					;================================================================						
+						
 					mov editstream.dwCookie,eax
 					mov editstream.pfnCallback,offset StreamOutProc
 					invoke SendMessage,hwndRichEdit,EM_STREAMOUT,SF_TEXT,addr editstream
-					;==========================================================
-					; Initialize the modify state to false
-					;==========================================================
+
 					invoke SendMessage,hwndRichEdit,EM_SETMODIFY,FALSE,0
 					invoke CloseHandle,hFile
 				.else

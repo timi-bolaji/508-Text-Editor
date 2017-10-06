@@ -20,7 +20,6 @@ FillBuffer     PROTO :DWORD,:DWORD,:BYTE
 Paint_Proc     PROTO :DWORD,:DWORD
 EditControl    PROTO :DWORD,:DWORD,:DWORD,:DWORD,:DWORD,:DWORD
 hEditProc      PROTO :DWORD,:DWORD,:DWORD,:DWORD
-Do_Status PROTO :DWORD 
 
 .const 
 MIDR_MAINMENU 	equ 201 
@@ -106,7 +105,6 @@ start:
 		invoke MessageBox,0,addr NoRichEdit,addr AppName,MB_OK or MB_ICONERROR
     .endif
 
-	;invoke WinMain, hInstance,NULL,NULL, SW_SHOWDEFAULT 
 	invoke ExitProcess,eax 
 
 WinMain proc hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD    
@@ -131,28 +129,13 @@ WinMain proc hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD
 	invoke LoadCursor,NULL,IDC_ARROW 
 	mov wc.hCursor,eax    
 	invoke RegisterClassEx, addr wc 
+
 	;================================================    
 	; Register the MDI child window class 
 	;================================================
-
-    ;mov   wc.style, CS_HREDRAW or CS_VREDRAW
 	mov   wc.lpfnWndProc, offset ChildProc
-	;mov   wc.cbClsExtra,NULL
-	;mov   wc.cbWndExtra,NULL
-	;push  hInst
-	;pop   wc.hInstance
 	mov   wc.hbrBackground,COLOR_WINDOW+1
-	;mov   wc.lpszMenuName, MAINMENU
 	mov   wc.lpszClassName,offset MDIChildClassName
-	;invoke LoadIcon,NULL,IDI_APPLICATION
-	;mov   wc.hIcon,eax
-	;mov   wc.hIconSm,eax
-	;invoke LoadCursor,NULL,IDC_ARROW
-	;mov   wc.hCursor,eax
-
-	;mov wc.lpfnWndProc,offset ChildProc 
-	;mov wc.hbrBackground,COLOR_WINDOW+1 
-	;mov wc.lpszClassName,offset MDIChildClassName 
 	invoke RegisterClassEx,addr wc 
 
 	invoke CreateWindowEx,NULL,ADDR ClassName,ADDR AppName,\ 
@@ -461,21 +444,13 @@ ChildProc proc hChild:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD
 				invoke DefMDIChildProc,hChild,uMsg,wParam,lParam
 			.endif
 		.endif
-	;.elseif uMsg==WM_CLOSE
-	;	invoke CheckModifyState,hWnd
-	;	.if eax==TRUE
-	;		invoke DestroyWindow,hWnd
-	;	.endif
+	
 	.elseif uMsg==WM_SIZE
 		mov eax,lParam
 		mov edx,eax
 		and eax,0FFFFh
 		shr edx,16
 		invoke MoveWindow,hwndRichEdit,0,0,eax,edx,TRUE
-	;.else
-		;invoke DefWindowProc,hWnd,uMsg,wParam,lParam		
-		;ret
-	;.endif
 
     .elseif uMsg==WM_CLOSE   
 		invoke MessageBox,hChild,addr ClosePromptMessage,addr AppName,MB_YESNO 

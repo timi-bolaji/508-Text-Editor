@@ -17,28 +17,63 @@ MIDM_TILEVERT	equ 50003
 MIDM_CASCADE	    equ 50004 
 MIDM_NEW 		equ 50005 
 MIDM_CLOSE	    equ 50006 
-
+;=================================================================
 .data 
 ClassName 	db "MDIASMClass",0 
 MDIClientName	db "MDICLIENT",0 
-MDIChildClassName	db "Win32asmMDIChild",0 
+MDIChildClassName	db "TextEdit",0 
 MDIChildTitle	db "Text Editor",0 
 AppName		db "Smartpad - Multi-window text editor",0 
 ClosePromptMessage	db "Are you sure you want to close this window?",0
 
+IsSave db "Save the file before closing?",0
+hStatus       dd 0
+RichEditDLL db "riched20.dll",0
+RichEditClass db "RichEdit20A",0
+NoRichEdit db "Cannot find riched20.dll",0
+FileFilterString 		db "Text file (*.txt)",0,"*.txt",0
+				db "All Files (*.*)",0,"*.*",0,0
+OpenFileFail db "Cannot open the file",0
+FileOpened dd FALSE
+BackgroundColor dd 0FFFFFFh		; default to white
+TextColor dd 0		            ; default to black
+
+;================================================================
+
 .data? 
-hInstance 	dd ? 
+CommandLine dd ?
+hInstance 	dd ?
+hIcon       dd ?
+hRichEditDLL   dd ?
+hwndRichEdit    dd ?
 hMainMenu 	dd ? 
 hwndClient 	dd ? 
 hChildMenu 	dd ? 
 mdicreate		MDICREATESTRUCT <> 
-hwndFrame 	dd ? 
+hwndFrame 	dd ?
+
+FileName db 256 dup(?)
+AlternateFileName db 256 dup(?)
+CustomColors dd 16 dup(?)
 
 .code 
 start: 
 	invoke GetModuleHandle, NULL    
-	mov hInstance,eax 
-	invoke WinMain, hInstance,NULL,NULL, SW_SHOWDEFAULT 
+	mov hInstance,eax
+
+    invoke GetCommandLine
+	mov CommandLine, eax 
+
+    invoke LoadLibrary,addr RichEditDLL
+	.if eax!=0
+	    mov hRichEditDLL,eax
+		invoke WinMain,hInstance,NULL,CommandLine,SW_SHOWDEFAULT
+		invoke FreeLibrary,hRichEditDLL
+	.else
+		invoke MessageBox,0,addr NoRichEdit,addr WindowName,MB_OK or MB_ICONERROR
+    .endif
+
+	;invoke WinMain, hInstance,NULL,NULL, SW_SHOWDEFAULT 
 	invoke ExitProcess,eax 
 
 WinMain proc hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD    
@@ -70,6 +105,7 @@ WinMain proc hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD
 	mov wc.hbrBackground,COLOR_WINDOW+1 
 	mov wc.lpszClassName,offset MDIChildClassName 
 	invoke RegisterClassEx,addr wc 
+
 	invoke CreateWindowEx,NULL,ADDR ClassName,ADDR AppName,\ 
 			WS_OVERLAPPEDWINDOW or WS_CLIPCHILDREN,CW_USEDEFAULT,\    
 			CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,NULL,0,\ 
@@ -77,7 +113,7 @@ WinMain proc hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD
 	mov hwndFrame,eax    
 	invoke LoadMenu,hInstance, MIDR_CHILDMENU 
 	mov hChildMenu,eax 
-	invoke ShowWindow,hwndFra`e,SW_SHOWNORMAL 
+	invoke ShowWindow,hwndFrame,SW_SHOWNORMAL 
 	invoke UpdateWindow, hwndFrame 
 	.while TRUE 
 		invoke GetMessage,ADDR msg,NULL,0,0 
@@ -148,7 +184,20 @@ WndProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
 	ret 
 WndProc endp 
 
-ChildProc proc hChild:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD 
+ChildProc proc hChild:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD
+
+    ;Local vars
+        LOCAL var    :DWORD
+        LOCAL hDC :DWORD
+        LOCAL rect    :RECT
+        LOCAL ps     :PAINTSTRUCT
+        LOCAL chrg:CHARRANGE
+        LOCAL ofn:OPENFILENAME
+        LOCAL buffer1[128]:BYTE
+        LOCAL FileBuffer[260]:BYTE
+        LOCAL editstream:EDITSTREAM
+        LOCAL hFile:DWORD
+
 	.if uMsg==WM_MDIACTIVATE    
 		mov eax,lParam 
 		.if eax==hChild 
@@ -160,17 +209,231 @@ ChildProc proc hChild:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD
 			mov edx,eax 
 			invoke SendMessage,hwndClient,WM_MDISETMENU,hMainMenu,edx 
 		.endif 
-		invoke DrawMenuBar,hwndFrame 
-	.elseif uMsg==WM_CLOSE   
+		invoke DrawMenuBar,hwndFrame
+
+
+    ;processing commands - taken from richedit example
+    .elseif uMsg==WM_CREATE
+		invoke CreateWindowEx,WS_EX_CLIENTEDGE,addr RichEditClass,0,WS_CHILD or WS_VISIBLE or ES_MULTILINE or WS_VSCROLL or WS_HSCROLL or ES_NOHIDESEL,\
+				CW_USEDEFAULT,CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,hWnd,RichEditID,hInstance,0
+		mov hwndRichEdit,eax
+
+		invoke SendMessage,hwndRichEdit,EM_LIMITTEXT,-1,0
+		
+		invoke SetColor
+		invoke SendMessage,hwndRichEdit,EM_SETMODIFY,FALSE,0
+		invoke SendMessage,hwndRichEdit,EM_EMPTYUNDOBUFFER,0,0
+	.elseif uMsg==WM_INITMENUPOPUP
+		mov eax,lParam
+		.if ax==0		; file menu			
+			.if FileOpened==TRUE	; a file is already opened
+				invoke EnableMenuItem,wParam,IDM_OPEN,MF_GRAYED
+				invoke EnableMenuItem,wParam,IDM_CLOSE,MF_ENABLED
+				invoke EnableMenuItem,wParam,IDM_SAVE,MF_ENABLED
+				invoke EnableMenuItem,wParam,IDM_SAVEAS,MF_ENABLED
+			.else
+				invoke EnableMenuItem,wParam,IDM_OPEN,MF_ENABLED
+				invoke EnableMenuItem,wParam,IDM_CLOSE,MF_GRAYED
+				invoke EnableMenuItem,wParam,IDM_SAVE,MF_GRAYED
+				invoke EnableMenuItem,wParam,IDM_SAVEAS,MF_GRAYED
+			.endif
+		.elseif ax==1	; edit menu
+		
+			invoke SendMessage,hwndRichEdit,EM_CANPASTE,CF_TEXT,0
+			.if eax==0		; no text in the clipboard
+				invoke EnableMenuItem,wParam,IDM_PASTE,MF_GRAYED
+			.else
+				invoke EnableMenuItem,wParam,IDM_PASTE,MF_ENABLED
+			.endif
+
+			invoke SendMessage,hwndRichEdit,EM_CANUNDO,0,0
+			.if eax==0
+				invoke EnableMenuItem,wParam,IDM_UNDO,MF_GRAYED
+			.else
+				invoke EnableMenuItem,wParam,IDM_UNDO,MF_ENABLED
+			.endif
+
+			invoke SendMessage,hwndRichEdit,EM_CANREDO,0,0
+			.if eax==0
+				invoke EnableMenuItem,wParam,IDM_REDO,MF_GRAYED
+			.else
+				invoke EnableMenuItem,wParam,IDM_REDO,MF_ENABLED
+			.endif
+
+			invoke SendMessage,hwndRichEdit,EM_EXGETSEL,0,addr chrg
+			mov eax,chrg.cpMin
+			.if eax==chrg.cpMax		; no current selection
+				invoke EnableMenuItem,wParam,IDM_COPY,MF_GRAYED
+				invoke EnableMenuItem,wParam,IDM_CUT,MF_GRAYED
+				invoke EnableMenuItem,wParam,IDM_DELETE,MF_GRAYED
+			.else
+				invoke EnableMenuItem,wParam,IDM_COPY,MF_ENABLED
+				invoke EnableMenuItem,wParam,IDM_CUT,MF_ENABLED
+				invoke EnableMenuItem,wParam,IDM_DELETE,MF_ENABLED
+			.endif
+		.endif
+	.elseif uMsg==WM_COMMAND
+		.if lParam==0		; menu commands
+			mov eax,wParam
+			.if ax==IDM_OPEN
+				invoke RtlZeroMemory,addr ofn,sizeof ofn
+				mov ofn.lStructSize,sizeof ofn
+				push hChild
+				pop ofn.hwndOwner
+				push hInstance
+				pop ofn.hInstance
+				mov ofn.lpstrFilter,offset FileFilterString
+				mov ofn.lpstrFile,offset FileName
+				mov byte ptr [FileName],0
+				mov ofn.nMaxFile,sizeof FileName
+				mov ofn.Flags,OFN_FILEMUSTEXIST or OFN_HIDEREADONLY or OFN_PATHMUSTEXIST
+				invoke GetOpenFileName,addr ofn
+				.if eax!=0
+					invoke CreateFile,addr FileName,GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,0
+					.if eax!=INVALID_HANDLE_VALUE
+						mov hFile,eax
+						
+						mov editstream.dwCookie,eax
+						mov editstream.pfnCallback,offset StreamInProc
+						invoke SendMessage,hwndRichEdit,EM_STREAMIN,SF_TEXT,addr editstream
+
+						invoke SendMessage,hwndRichEdit,EM_SETMODIFY,FALSE,0
+						invoke CloseHandle,hFile
+						mov FileOpened,TRUE
+					.else
+						invoke MessageBox,hChild,addr OpenFileFail,addr WindowName,MB_OK or MB_ICONERROR
+					.endif
+				.endif
+			.elseif ax==IDM_CLOSE
+				invoke CheckModifyState,hChild
+				.if eax==TRUE
+					invoke SetWindowText,hwndRichEdit,0
+					mov FileOpened,FALSE
+				.endif
+			.elseif ax==IDM_SAVE
+				invoke CreateFile,addr FileName,GENERIC_WRITE,FILE_SHARE_READ,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,0
+				.if eax!=INVALID_HANDLE_VALUE
+@@:				
+					mov hFile,eax
+						
+					mov editstream.dwCookie,eax
+					mov editstream.pfnCallback,offset StreamOutProc
+					invoke SendMessage,hwndRichEdit,EM_STREAMOUT,SF_TEXT,addr editstream
+
+					invoke SendMessage,hwndRichEdit,EM_SETMODIFY,FALSE,0
+					invoke CloseHandle,hFile
+				.else
+					invoke MessageBox,hChild,addr OpenFileFail,addr WindowName,MB_OK or MB_ICONERROR
+				.endif
+			.elseif ax==IDM_COPY
+				invoke SendMessage,hwndRichEdit,WM_COPY,0,0
+			.elseif ax==IDM_CUT
+				invoke SendMessage,hwndRichEdit,WM_CUT,0,0
+			.elseif ax==IDM_PASTE
+				invoke SendMessage,hwndRichEdit,WM_PASTE,0,0
+			.elseif ax==IDM_DELETE
+				invoke SendMessage,hwndRichEdit,EM_REPLACESEL,TRUE,0
+			.elseif ax==IDM_SELECTALL
+				mov chrg.cpMin,0
+				mov chrg.cpMax,-1
+				invoke SendMessage,hwndRichEdit,EM_EXSETSEL,0,addr chrg
+			.elseif ax==IDM_UNDO
+				invoke SendMessage,hwndRichEdit,EM_UNDO,0,0
+			.elseif ax==IDM_REDO
+				invoke SendMessage,hwndRichEdit,EM_REDO,0,0
+			
+			.elseif ax==IDM_SAVEAS
+				invoke RtlZeroMemory,addr ofn,sizeof ofn
+				mov ofn.lStructSize,sizeof ofn
+				push hChild
+				pop ofn.hwndOwner
+				push hInstance
+				pop ofn.hInstance
+				mov ofn.lpstrFilter,offset FileFilterString
+				mov ofn.lpstrFile,offset AlternateFileName
+				mov byte ptr [AlternateFileName],0
+				mov ofn.nMaxFile,sizeof AlternateFileName
+				mov ofn.Flags,OFN_FILEMUSTEXIST or OFN_HIDEREADONLY or OFN_PATHMUSTEXIST
+				invoke GetSaveFileName,addr ofn
+				.if eax!=0
+					invoke CreateFile,addr AlternateFileName,GENERIC_WRITE,FILE_SHARE_READ,NULL,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,0
+					.if eax!=INVALID_HANDLE_VALUE
+						jmp @B
+					.endif
+				.endif
+			.elseif ax==IDM_EXIT
+				invoke SendMessage,hChild,WM_CLOSE,0,0
+			.endif
+		.endif
+	;.elseif uMsg==WM_CLOSE
+	;	invoke CheckModifyState,hWnd
+	;	.if eax==TRUE
+	;		invoke DestroyWindow,hWnd
+	;	.endif
+	.elseif uMsg==WM_SIZE
+		mov eax,lParam
+		mov edx,eax
+		and eax,0FFFFh
+		shr edx,16
+		invoke MoveWindow,hwndRichEdit,0,0,eax,edx,TRUE		
+	.elseif uMsg==WM_DESTROY
+		invoke PostQuitMessage,NULL
+	;.else
+		;invoke DefWindowProc,hWnd,uMsg,wParam,lParam		
+		;ret
+	;.endif
+
+    .elseif uMsg==WM_CLOSE   
 		invoke MessageBox,hChild,addr ClosePromptMessage,addr AppName,MB_YESNO 
 		.if eax==IDYES    
 			invoke SendMessage,hwndClient,WM_MDIDESTROY,hChild,0 
 		.endif 
 	.else 
 		invoke DefMDIChildProc,hChild,uMsg,wParam,lParam    
-		ret 
-	.endif 
+		ret
+    .endif
+
 	xor eax,eax 
 	ret 
 ChildProc endp 
+
+;Other procs relevant to the richedit business
+StreamInProc proc hFile:DWORD,pBuffer:DWORD, NumBytes:DWORD, pBytesRead:DWORD
+	invoke ReadFile,hFile,pBuffer,NumBytes,pBytesRead,0
+	xor eax,1
+	ret
+StreamInProc endp
+
+StreamOutProc proc hFile:DWORD,pBuffer:DWORD, NumBytes:DWORD, pBytesWritten:DWORD
+	invoke WriteFile,hFile,pBuffer,NumBytes,pBytesWritten,0
+	xor eax,1
+	ret
+StreamOutProc endp
+
+CheckModifyState proc hWnd:DWORD
+	invoke SendMessage,hwndRichEdit,EM_GETMODIFY,0,0
+	.if eax!=0
+		invoke MessageBox,hWnd,addr IsSave,addr WindowName,MB_YESNOCANCEL
+		.if eax==IDYES
+			invoke SendMessage,hWnd,WM_COMMAND,IDM_SAVE,0
+		.elseif eax==IDCANCEL
+			mov eax,FALSE
+			ret
+		.endif
+	.endif
+	mov eax,TRUE
+	ret
+CheckModifyState endp
+
+SetColor proc
+	LOCAL cfm:CHARFORMAT
+	invoke SendMessage,hwndRichEdit,EM_SETBKGNDCOLOR,0,BackgroundColor
+	invoke RtlZeroMemory,addr cfm,sizeof cfm
+	mov cfm.cbSize,sizeof cfm
+	mov cfm.dwMask,CFM_COLOR
+	push TextColor
+	pop cfm.crTextColor
+	invoke SendMessage,hwndRichEdit,EM_SETCHARFORMAT,SCF_ALL,addr cfm
+	ret
+
 end start 

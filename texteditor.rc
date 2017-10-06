@@ -1,9 +1,6 @@
 #include "resource.h"
 
-#define MAINMENU                    101
-#define IDD_OPTIONDLG                   101
-#define IDC_BACKCOLORBOX                1000
-#define IDC_TEXTCOLORBOX                1001
+#define MAINMENU                        101
 #define IDM_OPEN                        40001
 #define IDM_SAVE                        40002
 #define IDM_CLOSE                       40003
@@ -14,7 +11,6 @@
 #define IDM_PASTE                       40008
 #define IDM_DELETE                      40009
 #define IDM_SELECTALL                   40010
-#define IDM_OPTION                      40011
 #define IDM_UNDO                        40012
 #define IDM_REDO                        40013
 

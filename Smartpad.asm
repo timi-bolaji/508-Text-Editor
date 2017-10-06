@@ -185,12 +185,12 @@ WndProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
 		mov hMainMenu,eax 
 		invoke GetSubMenu,hMainMenu,2    
 		mov ClientStruct.hWindowMenu,eax 
-		mov ClientStruct.idFirstChild,100 
+		mov ClientStruct.idFirstChild,900 
 		INVOKE CreateWindowEx,NULL,ADDR MDIClientName,NULL,\ 
 				WS_CHILD or WS_VISIBLE or WS_CLIPCHILDREN,CW_USEDEFAULT,\
 				CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,hWnd,NULL,\ 
 				hInstance,addr ClientStruct    
-		mov hwndClient,eax 
+		mov hwndClient,eax
 		;======================================= 
 		; Initialize the MDICREATESTRUCT 
 		;======================================= 
@@ -218,7 +218,6 @@ WndProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
 			.elseif ax==MIDM_CLOSE 
 				invoke SendMessage,hwndClient,WM_MDIGETACTIVE,0,0
 				invoke SendMessage,eax,WM_CLOSE,0,0
-            ;==========================================
             ; Child menu options
 			.else
                 invoke SendMessage,hwndClient,WM_MDIGETACTIVE,0,0
@@ -308,8 +307,6 @@ ChildProc proc hChild:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD
 		.endif 
 		invoke DrawMenuBar,hwndFrame
 
-
-    ;processing commands - taken from richedit example
     .elseif uMsg==WM_CREATE
 		invoke CreateWindowEx,WS_EX_CLIENTEDGE,addr RichEditClass,0,WS_CHILD or WS_VISIBLE or ES_MULTILINE or WS_VSCROLL or WS_HSCROLL or ES_NOHIDESEL,\
 				CW_USEDEFAULT,CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,hChild,RichEditID,hInstance,0
@@ -460,6 +457,8 @@ ChildProc proc hChild:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD
 				.endif
 			.elseif ax==IDM_EXIT
 				invoke SendMessage,hChild,WM_CLOSE,0,0
+			.else
+				invoke DefMDIChildProc,hChild,uMsg,wParam,lParam
 			.endif
 		.endif
 	;.elseif uMsg==WM_CLOSE
@@ -472,9 +471,7 @@ ChildProc proc hChild:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD
 		mov edx,eax
 		and eax,0FFFFh
 		shr edx,16
-		invoke MoveWindow,hwndRichEdit,0,0,eax,edx,TRUE		
-	.elseif uMsg==WM_DESTROY
-		invoke PostQuitMessage,NULL
+		invoke MoveWindow,hwndRichEdit,0,0,eax,edx,TRUE
 	;.else
 		;invoke DefWindowProc,hWnd,uMsg,wParam,lParam		
 		;ret
@@ -482,7 +479,8 @@ ChildProc proc hChild:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD
 
     .elseif uMsg==WM_CLOSE   
 		invoke MessageBox,hChild,addr ClosePromptMessage,addr AppName,MB_YESNO 
-		.if eax==IDYES    
+		.if eax==IDYES 
+			;invoke DestroyWindow,hChild   
 			invoke SendMessage,hwndClient,WM_MDIDESTROY,hChild,0 
 		.endif 
 	.else 

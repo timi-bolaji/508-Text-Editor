@@ -28,11 +28,13 @@ MIDR_CHILDMENU	equ 202
 MIDM_EXIT 		equ 50001 
 MIDM_TILEHORZ	equ 50002 
 MIDM_TILEVERT	equ 50003
-MIDM_CASCADE	    equ 50004 
+MIDM_CASCADE	equ 50004 
 MIDM_NEW 		equ 50005 
 MIDM_CLOSE	    equ 50006
+
 ; constants important for the richedit windows
-MAINMENU                   equ 101
+
+MAINMENU                   equ 801
 IDM_OPEN                   equ 40001
 IDM_SAVE                   equ 40002
 IDM_CLOSE                  equ 40003
@@ -45,7 +47,7 @@ IDM_DELETE                 equ 40009
 IDM_SELECTALL              equ 40010
 IDM_OPTION 			       equ 40011
 IDM_UNDO			       equ 40012
-IDM_REDO	                   equ 40013
+IDM_REDO	               equ 40013
 
 RichEditID 			equ 300
 ;=================================================================
@@ -133,20 +135,20 @@ WinMain proc hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD
 	; Register the MDI child window class 
 	;================================================
 
-    mov   wc.style, CS_HREDRAW or CS_VREDRAW
-	mov   wc.lpfnWndProc, OFFSET ChildProc
-	mov   wc.cbClsExtra,NULL
-	mov   wc.cbWndExtra,NULL
-	push  hInst
-	pop   wc.hInstance
+    ;mov   wc.style, CS_HREDRAW or CS_VREDRAW
+	mov   wc.lpfnWndProc, offset ChildProc
+	;mov   wc.cbClsExtra,NULL
+	;mov   wc.cbWndExtra,NULL
+	;push  hInst
+	;pop   wc.hInstance
 	mov   wc.hbrBackground,COLOR_WINDOW+1
-	mov   wc.lpszMenuName,MAINMENU
-	mov   wc.lpszClassName,OFFSET MDIChildClassName
-	invoke LoadIcon,NULL,IDI_APPLICATION
-	mov   wc.hIcon,eax
-	mov   wc.hIconSm,eax
-	invoke LoadCursor,NULL,IDC_ARROW
-	mov   wc.hCursor,eax
+	;mov   wc.lpszMenuName, MAINMENU
+	mov   wc.lpszClassName,offset MDIChildClassName
+	;invoke LoadIcon,NULL,IDI_APPLICATION
+	;mov   wc.hIcon,eax
+	;mov   wc.hIconSm,eax
+	;invoke LoadCursor,NULL,IDC_ARROW
+	;mov   wc.hCursor,eax
 
 	;mov wc.lpfnWndProc,offset ChildProc 
 	;mov wc.hbrBackground,COLOR_WINDOW+1 
@@ -181,7 +183,7 @@ WndProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
 	.if uMsg==WM_CREATE 
 		invoke GetMenu,hWnd 
 		mov hMainMenu,eax 
-		invoke GetSubMenu,hMainMenu,1    
+		invoke GetSubMenu,hMainMenu,2    
 		mov ClientStruct.hWindowMenu,eax 
 		mov ClientStruct.idFirstChild,100 
 		INVOKE CreateWindowEx,NULL,ADDR MDIClientName,NULL,\ 
@@ -193,7 +195,7 @@ WndProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
 		; Initialize the MDICREATESTRUCT 
 		;======================================= 
 		mov mdicreate.szClass,offset MDIChildClassName 
-		mov mdicreate.szTitle,offset MDIChildTitle 
+		mov mdicreate.szTitle,offset MDIChildTitle
 		push hInstance    
 		pop mdicreate.hOwner 
 		mov mdicreate.x,CW_USEDEFAULT 
@@ -214,9 +216,13 @@ WndProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
 			.elseif ax==MIDM_NEW 
 				invoke SendMessage,hwndClient,WM_MDICREATE,0,addr mdicreate   
 			.elseif ax==MIDM_CLOSE 
-				invoke SendMessage,hwndClient,WM_MDIGETACTIVE,0,0 
-				invoke SendMessage,eax,WM_CLOSE,0,0 
-			.else 
+				invoke SendMessage,hwndClient,WM_MDIGETACTIVE,0,0
+				invoke SendMessage,eax,WM_CLOSE,0,0
+            ;==========================================
+            ; Child menu options
+			.else
+                invoke SendMessage,hwndClient,WM_MDIGETACTIVE,0,0
+                invoke SendMessage,eax,WM_COMMAND,wParam,0 
 				invoke DefFrameProc,hWnd,hwndClient,uMsg,wParam,lParam	   
 				ret
 			.endif 
@@ -292,11 +298,11 @@ ChildProc proc hChild:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD
 	.if uMsg==WM_MDIACTIVATE    
 		mov eax,lParam 
 		.if eax==hChild 
-			invoke GetSubMenu,hChildMenu,1 
+			invoke GetSubMenu,hChildMenu,2 
 			mov edx,eax 
 			invoke SendMessage,hwndClient,WM_MDISETMENU,hChildMenu,edx 
 		.else 
-			invoke GetSubMenu,hMainMenu,1    
+			invoke GetSubMenu,hMainMenu,2    
 			mov edx,eax 
 			invoke SendMessage,hwndClient,WM_MDISETMENU,hMainMenu,edx 
 		.endif 

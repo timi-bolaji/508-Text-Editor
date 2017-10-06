@@ -1,6 +1,6 @@
 #include "resource.h"
 
-#define MAINMENU                        101
+#define MAINMENU                        801
 #define IDM_OPEN                        40001
 #define IDM_SAVE                        40002
 #define IDM_CLOSE                       40003
@@ -24,7 +24,7 @@
 #define MIDM_CLOSE                      50006
 
 
-MAINMENU MENU  
+MAINMENU MENU
 BEGIN
     POPUP "&File"
     BEGIN
@@ -53,7 +53,7 @@ MIDR_MAINMENU MENU DISCARDABLE
 BEGIN
     POPUP "&File"
     BEGIN
-        MENUITEM "&New", MIDM_NEW
+        MENUITEM "&New File", MIDM_NEW
         MENUITEM "E&xit",                       MIDM_EXIT
     END
     POPUP "&Window"    
@@ -68,6 +68,39 @@ MIDR_CHILDMENU MENU DISCARDABLE
 BEGIN
     POPUP "&File (child)"
     BEGIN
+        MENUITEM "&New File", MIDM_NEW
+        MENUITEM "&Close Editor",MIDM_CLOSE
+        MENUITEM "E&xit",                       MIDM_EXIT
+        MENUITEM SEPARATOR
+        MENUITEM "&Open File",                       IDM_OPEN
+        MENUITEM "&Close File",                      IDM_CLOSE
+        MENUITEM "&Save ",                       IDM_SAVE
+        MENUITEM "Save &As",                    IDM_SAVEAS
+    END
+    POPUP "&Edit"
+    BEGIN
+        MENUITEM "&Undo",                       IDM_UNDO
+        MENUITEM "&Redo",                       IDM_REDO
+        MENUITEM "&Copy",                       IDM_COPY
+        MENUITEM "C&ut",                        IDM_CUT
+        MENUITEM "&Paste",                      IDM_PASTE
+        MENUITEM SEPARATOR
+        MENUITEM "&Delete",                     IDM_DELETE
+        MENUITEM SEPARATOR
+        MENUITEM "Select &All",                 IDM_SELECTALL
+    END
+    POPUP "&Window (child)"    
+    BEGIN
+    	MENUITEM "Tile Horizontal",MIDM_TILEHORZ
+    	MENUITEM "Tile Vertical",MIDM_TILEVERT
+    	MENUITEM "Cascade",MIDM_CASCADE
+    END
+END
+
+MIDR_CHILDMENU2 MENU DISCARDABLE 
+BEGIN
+    POPUP "&File (child)"
+    BEGIN
         MENUITEM "&New", MIDM_NEW
         MENUITEM "&Close",MIDM_CLOSE
         MENUITEM "E&xit",                       MIDM_EXIT
@@ -79,4 +112,3 @@ BEGIN
     	MENUITEM "Cascade",MIDM_CASCADE
     END
 END
-

@@ -1,1 +1,2 @@
 Demo commit
+This comment was added by this editor -> testeditor.exe

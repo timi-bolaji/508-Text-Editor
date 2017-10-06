@@ -1,0 +1,41 @@
+#include "resource.h"
+
+#define MIDR_MAINMENU                    201
+#define MIDR_CHILDMENU                   202
+#define MIDM_EXIT                        50001
+#define MIDM_TILEHORZ			        50002
+#define MIDM_TILEVERT			        50003
+#define MIDM_CASCADE			            50004
+#define MIDM_NEW	                        50005
+#define MIDM_CLOSE                       50006
+
+MIDR_MAINMENU MENU DISCARDABLE 
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "&New", MIDM_NEW
+        MENUITEM "E&xit",                       MIDM_EXIT
+    END
+    POPUP "&Window"    
+    BEGIN
+    	MENUITEM "Tile Horizontal",MIDM_TILEHORZ
+    	MENUITEM "Tile Vertical",MIDM_TILEVERT
+    	MENUITEM "Cascade",MIDM_CASCADE
+    END
+END
+
+MIDR_CHILDMENU MENU DISCARDABLE 
+BEGIN
+    POPUP "&File (child)"
+    BEGIN
+        MENUITEM "&New", MIDM_NEW
+        MENUITEM "&Close",MIDM_CLOSE
+        MENUITEM "E&xit",                       MIDM_EXIT
+    END
+    POPUP "&Window (child)"    
+    BEGIN
+    	MENUITEM "Tile Horizontal",MIDM_TILEHORZ
+    	MENUITEM "Tile Vertical",MIDM_TILEVERT
+    	MENUITEM "Cascade",MIDM_CASCADE
+    END
+END

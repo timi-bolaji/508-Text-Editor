@@ -13,6 +13,10 @@
 #define IDM_OPTION                      40011
 #define IDM_UNDO                        40012
 #define IDM_REDO                        40013
+#define MAINMENU                    101
+#define IDD_OPTIONDLG                   101
+#define IDC_BACKCOLORBOX                1000
+#define IDC_TEXTCOLORBOX                1001
 
 MAINMENU MENU 
 BEGIN

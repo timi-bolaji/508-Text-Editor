@@ -25,7 +25,7 @@ hEditProc      PROTO :DWORD,:DWORD,:DWORD,:DWORD
 Do_Status PROTO :DWORD
 
 .const
-IDR_MAINMENU                   equ 101
+MAINMENU                   equ 101
 IDM_OPEN                       equ  40001
 IDM_SAVE                       equ 40002
 IDM_CLOSE                      equ 40003
@@ -109,7 +109,7 @@ WinMain proc hInst:DWORD,hPrevInst:DWORD,CmdLine:DWORD,CmdShow:DWORD
 	push  hInst
 	pop   wc.hInstance
 	mov   wc.hbrBackground,COLOR_WINDOW+1
-	mov   wc.lpszMenuName,IDR_MAINMENU
+	mov   wc.lpszMenuName,MAINMENU
 	mov   wc.lpszClassName,OFFSET ClassName
 	invoke LoadIcon,NULL,IDI_APPLICATION
 	mov   wc.hIcon,eax

@@ -1,12 +1,26 @@
 .386 
 .model flat,stdcall 
 option casemap:none 
-include \masm32\include\windows.inc    
-include \masm32\include\user32.inc 
-include \masm32\include\kernel32.inc 
-includelib \masm32\lib\user32.lib 
-includelib \masm32\lib\kernel32.lib 
-WinMain proto :DWORD,:DWORD,:DWORD,:DWORD    
+include     \masm32\include\windows.inc
+include     \masm32\include\masm32.inc
+include     \masm32\include\kernel32.inc
+include     \masm32\include\user32.inc
+include     \masm32\include\comdlg32.inc
+include     \masm32\include\gdi32.inc
+include     \masm32\include\comctl32.inc
+includelib  \masm32\lib\kernel32.lib
+includelib  \masm32\lib\user32.lib
+includelib  \masm32\lib\comdlg32.lib
+includelib  \masm32\lib\gdi32.lib
+includelib  \masm32\lib\comctl32.lib
+
+WinMain PROTO :DWORD,:DWORD,:DWORD,:DWORD
+WndProc PROTO :DWORD,:DWORD,:DWORD,:DWORD
+FillBuffer     PROTO :DWORD,:DWORD,:BYTE
+Paint_Proc     PROTO :DWORD,:DWORD
+EditControl    PROTO :DWORD,:DWORD,:DWORD,:DWORD,:DWORD,:DWORD
+hEditProc      PROTO :DWORD,:DWORD,:DWORD,:DWORD
+Do_Status PROTO :DWORD 
 
 .const 
 MIDR_MAINMENU 	equ 201 
@@ -16,7 +30,24 @@ MIDM_TILEHORZ	equ 50002
 MIDM_TILEVERT	equ 50003
 MIDM_CASCADE	    equ 50004 
 MIDM_NEW 		equ 50005 
-MIDM_CLOSE	    equ 50006 
+MIDM_CLOSE	    equ 50006
+; constants important for the richedit windows
+MAINMENU                   equ 101
+IDM_OPEN                   equ 40001
+IDM_SAVE                   equ 40002
+IDM_CLOSE                  equ 40003
+IDM_SAVEAS                 equ 40004
+IDM_EXIT                   equ 40005
+IDM_COPY                   equ 40006
+IDM_CUT                    equ 40007
+IDM_PASTE                  equ 40008
+IDM_DELETE                 equ 40009
+IDM_SELECTALL              equ 40010
+IDM_OPTION 			       equ 40011
+IDM_UNDO			       equ 40012
+IDM_REDO	                   equ 40013
+
+RichEditID 			equ 300
 ;=================================================================
 .data 
 ClassName 	db "MDIASMClass",0 
@@ -70,7 +101,7 @@ start:
 		invoke WinMain,hInstance,NULL,CommandLine,SW_SHOWDEFAULT
 		invoke FreeLibrary,hRichEditDLL
 	.else
-		invoke MessageBox,0,addr NoRichEdit,addr WindowName,MB_OK or MB_ICONERROR
+		invoke MessageBox,0,addr NoRichEdit,addr AppName,MB_OK or MB_ICONERROR
     .endif
 
 	;invoke WinMain, hInstance,NULL,NULL, SW_SHOWDEFAULT 
@@ -100,10 +131,26 @@ WinMain proc hInst:HINSTANCE,hPrevInst:HINSTANCE,CmdLine:LPSTR,CmdShow:DWORD
 	invoke RegisterClassEx, addr wc 
 	;================================================    
 	; Register the MDI child window class 
-	;================================================    
-	mov wc.lpfnWndProc,offset ChildProc 
-	mov wc.hbrBackground,COLOR_WINDOW+1 
-	mov wc.lpszClassName,offset MDIChildClassName 
+	;================================================
+
+    mov   wc.style, CS_HREDRAW or CS_VREDRAW
+	mov   wc.lpfnWndProc, OFFSET ChildProc
+	mov   wc.cbClsExtra,NULL
+	mov   wc.cbWndExtra,NULL
+	push  hInst
+	pop   wc.hInstance
+	mov   wc.hbrBackground,COLOR_WINDOW+1
+	mov   wc.lpszMenuName,MAINMENU
+	mov   wc.lpszClassName,OFFSET MDIChildClassName
+	invoke LoadIcon,NULL,IDI_APPLICATION
+	mov   wc.hIcon,eax
+	mov   wc.hIconSm,eax
+	invoke LoadCursor,NULL,IDC_ARROW
+	mov   wc.hCursor,eax
+
+	;mov wc.lpfnWndProc,offset ChildProc 
+	;mov wc.hbrBackground,COLOR_WINDOW+1 
+	;mov wc.lpszClassName,offset MDIChildClassName 
 	invoke RegisterClassEx,addr wc 
 
 	invoke CreateWindowEx,NULL,ADDR ClassName,ADDR AppName,\ 
@@ -182,7 +229,51 @@ WndProc proc hWnd:HWND, uMsg:UINT, wParam:WPARAM, lParam:LPARAM
 	.endif 
 	xor eax,eax 
 	ret 
-WndProc endp 
+WndProc endp
+
+;===========================================================================================
+;Other procs relevant to the richedit business
+
+StreamInProc proc hFile:DWORD,pBuffer:DWORD, NumBytes:DWORD, pBytesRead:DWORD
+	invoke ReadFile,hFile,pBuffer,NumBytes,pBytesRead,0
+	xor eax,1
+	ret
+StreamInProc endp
+
+StreamOutProc proc hFile:DWORD,pBuffer:DWORD, NumBytes:DWORD, pBytesWritten:DWORD
+	invoke WriteFile,hFile,pBuffer,NumBytes,pBytesWritten,0
+	xor eax,1
+	ret
+StreamOutProc endp
+
+CheckModifyState proc hWnd:DWORD
+	invoke SendMessage,hwndRichEdit,EM_GETMODIFY,0,0
+	.if eax!=0
+		invoke MessageBox,hWnd,addr IsSave,addr MDIChildTitle,MB_YESNOCANCEL
+		.if eax==IDYES
+			invoke SendMessage,hWnd,WM_COMMAND,IDM_SAVE,0
+		.elseif eax==IDCANCEL
+			mov eax,FALSE
+			ret
+		.endif
+	.endif
+	mov eax,TRUE
+	ret
+CheckModifyState endp
+
+SetColor proc
+	LOCAL cfm:CHARFORMAT
+	invoke SendMessage,hwndRichEdit,EM_SETBKGNDCOLOR,0,BackgroundColor
+	invoke RtlZeroMemory,addr cfm,sizeof cfm
+	mov cfm.cbSize,sizeof cfm
+	mov cfm.dwMask,CFM_COLOR
+	push TextColor
+	pop cfm.crTextColor
+	invoke SendMessage,hwndRichEdit,EM_SETCHARFORMAT,SCF_ALL,addr cfm
+	ret
+SetColor endp
+
+;===========================================================================================
 
 ChildProc proc hChild:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD
 
@@ -215,7 +306,7 @@ ChildProc proc hChild:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD
     ;processing commands - taken from richedit example
     .elseif uMsg==WM_CREATE
 		invoke CreateWindowEx,WS_EX_CLIENTEDGE,addr RichEditClass,0,WS_CHILD or WS_VISIBLE or ES_MULTILINE or WS_VSCROLL or WS_HSCROLL or ES_NOHIDESEL,\
-				CW_USEDEFAULT,CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,hWnd,RichEditID,hInstance,0
+				CW_USEDEFAULT,CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,hChild,RichEditID,hInstance,0
 		mov hwndRichEdit,eax
 
 		invoke SendMessage,hwndRichEdit,EM_LIMITTEXT,-1,0
@@ -301,7 +392,7 @@ ChildProc proc hChild:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD
 						invoke CloseHandle,hFile
 						mov FileOpened,TRUE
 					.else
-						invoke MessageBox,hChild,addr OpenFileFail,addr WindowName,MB_OK or MB_ICONERROR
+						invoke MessageBox,hChild,addr OpenFileFail,addr MDIChildTitle,MB_OK or MB_ICONERROR
 					.endif
 				.endif
 			.elseif ax==IDM_CLOSE
@@ -323,7 +414,7 @@ ChildProc proc hChild:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD
 					invoke SendMessage,hwndRichEdit,EM_SETMODIFY,FALSE,0
 					invoke CloseHandle,hFile
 				.else
-					invoke MessageBox,hChild,addr OpenFileFail,addr WindowName,MB_OK or MB_ICONERROR
+					invoke MessageBox,hChild,addr OpenFileFail,addr MDIChildTitle,MB_OK or MB_ICONERROR
 				.endif
 			.elseif ax==IDM_COPY
 				invoke SendMessage,hwndRichEdit,WM_COPY,0,0
@@ -396,44 +487,5 @@ ChildProc proc hChild:DWORD,uMsg:DWORD,wParam:DWORD,lParam:DWORD
 	xor eax,eax 
 	ret 
 ChildProc endp 
-
-;Other procs relevant to the richedit business
-StreamInProc proc hFile:DWORD,pBuffer:DWORD, NumBytes:DWORD, pBytesRead:DWORD
-	invoke ReadFile,hFile,pBuffer,NumBytes,pBytesRead,0
-	xor eax,1
-	ret
-StreamInProc endp
-
-StreamOutProc proc hFile:DWORD,pBuffer:DWORD, NumBytes:DWORD, pBytesWritten:DWORD
-	invoke WriteFile,hFile,pBuffer,NumBytes,pBytesWritten,0
-	xor eax,1
-	ret
-StreamOutProc endp
-
-CheckModifyState proc hWnd:DWORD
-	invoke SendMessage,hwndRichEdit,EM_GETMODIFY,0,0
-	.if eax!=0
-		invoke MessageBox,hWnd,addr IsSave,addr WindowName,MB_YESNOCANCEL
-		.if eax==IDYES
-			invoke SendMessage,hWnd,WM_COMMAND,IDM_SAVE,0
-		.elseif eax==IDCANCEL
-			mov eax,FALSE
-			ret
-		.endif
-	.endif
-	mov eax,TRUE
-	ret
-CheckModifyState endp
-
-SetColor proc
-	LOCAL cfm:CHARFORMAT
-	invoke SendMessage,hwndRichEdit,EM_SETBKGNDCOLOR,0,BackgroundColor
-	invoke RtlZeroMemory,addr cfm,sizeof cfm
-	mov cfm.cbSize,sizeof cfm
-	mov cfm.dwMask,CFM_COLOR
-	push TextColor
-	pop cfm.crTextColor
-	invoke SendMessage,hwndRichEdit,EM_SETCHARFORMAT,SCF_ALL,addr cfm
-	ret
 
 end start 

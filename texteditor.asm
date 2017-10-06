@@ -39,9 +39,7 @@ IDM_SELECTALL                  equ 40010
 IDM_OPTION 			       equ 40011
 IDM_UNDO			       equ 40012
 IDM_REDO	                   equ 40013
-IDD_OPTIONDLG                  equ 101
-IDC_BACKCOLORBOX               equ 1000
-IDC_TEXTCOLORBOX               equ 1001
+
 
 RichEditID 			equ 300
 
